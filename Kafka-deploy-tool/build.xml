@@ -1,0 +1,257 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<project name="CreateKafkaDeploy" default="SHOWMESSAGE" basedir=".">
+
+    <property file="${basedir}/config.properties"/>
+
+    <property name="product-config" location="${basedir}/product-config" description="配置目录"/>
+    <property name="productfolder" location="${product-config}/product" description="kakfa原始文件目录"/>
+    <!--<property name="deployFolder" location="${basedir}/deploy" description="生成的kafka组的根部署目录"/>-->
+    <property name="deployFolder" location="${DEPLOY_DIR}" description="生成的kafka组的根部署目录"/>
+    <!--引用jar包-->
+    <taskdef resource="net/sf/antcontrib/antlib.xml" classpath="${product-config}/lib/ant-contrib-1.0b3.jar"/>
+    <taskdef resource="net/sf/antcontrib/antcontrib.properties">
+        <classpath>
+            <pathelement location="${product-config}/lib/ant-contrib-1.0b3.jar"/>
+        </classpath>
+    </taskdef>
+
+
+
+    <target name="SHOWMESSAGE">
+        <echo message="Kafka测试环境部署工具"/>
+        <echo message="部署工具的配置信息在config.properties文件中，启用工具前，请提前做好配置"/>
+        <echo message="可用命令如下："/>
+        <echo message="ant getkafka   :下载kafka压缩包"/>
+        <echo message="ant reall           :清理所有并重新生成Kafka组"/>
+        <echo message="             "/>
+        <echo message="请使用ant -p 命令查看所有可用任务"/>
+        <echo message="使用ant 命令1 命令2 命令3 可自动顺序执行多个命令"/>
+    </target>
+
+
+    <target name="reall" depends="clearKafka,calcZookeeperURL,createKafkaGroup,createRunScript"
+            description="清理所有并重新生成Kafka组"/>
+
+    <target name="getkafka" description="下载kafka压缩包">
+        <delete dir="${productfolder}"/>
+        <mkdir dir="${productfolder}"/>
+        <get src="https://mirrors.tuna.tsinghua.edu.cn/apache/kafka/2.0.0/kafka_2.11-2.0.0.tgz"
+             dest="${productfolder}/kafka_2.11-2.0.0.tgz" usetimestamp="true"/>
+        <untar src="${productfolder}/kafka_2.11-2.0.0.tgz" dest="${productfolder}/" compression="gzip"/>
+
+        <!-- 改成不带版本号的，后续使用时会比较方便-->
+        <copy todir="${productfolder}/kafka">
+            <fileset dir="${productfolder}/kafka_2.11-2.0.0">
+            </fileset>
+        </copy>
+        <delete dir="${productfolder}/kafka_2.11-2.0.0"/>
+        <delete file="${productfolder}/kafka_2.11-2.0.0.tgz"/>
+    </target>
+
+    <!--清理掉现有环境中的多余的产品文件-->
+    <target name="clearKafka">
+        <delete includeemptydirs="true" verbose="false" failonerror="false">
+            <fileset dir="${deployFolder}">
+                <include name="Kafka-Group*/**"/>
+            </fileset>
+        </delete>
+    </target>
+
+
+    <!--根据配置重新生成所有的kafka-->
+    <target name="createKafkaGroup">
+        <if>
+            <equals arg1="${DEPLOY_KAFKA_GROUP_NUMBER}" arg2="0"/>
+            <else>
+                <for param="i" begin="${DEPLOY_KAFKA_GROUP_NUMBER}" step="-1" end="1">
+                    <sequential>
+                        <echo>this is deployment for KAFKA-GROUP@{i}</echo>
+                        <delete dir="${deployFolder}/Kafka-Group@{i}"/>
+                        <mkdir dir="${deployFolder}/Kafka-Group@{i}"/>
+
+                        <!--拷贝kafka基本文件到对应的部署目录-->
+                        <copy todir="${deployFolder}/Kafka-Group@{i}">
+                            <fileset dir="${productfolder}/kafka"/>
+                        </copy>
+
+                        <!--替换zookeeper的port-->
+                        <replace file="${deployFolder}/Kafka-Group@{i}/config/zookeeper.properties" token="2181"
+                                 value="${Group@{i}.ZOOKEEPER.PORT}" encoding="UTF-8"/>
+
+                        <!--添加zookeeper的ID文件，windows下与linux下有所不同所以两处都添加-->
+                        <echo message="@{i}" file="${deployFolder}/Kafka-Group@{i}/bin/windows/tmp/zookeeper/myid"
+                              append="false"/>
+                        <echo message="@{i}" file="${deployFolder}/Kafka-Group@{i}/bin/tmp/zookeeper/myid"
+                              append="false"/>
+
+                        <!--添加zookeeper的基本配置和server.id相关-->
+                        <echo message="${line.separator}initLimit=5"
+                              file="${deployFolder}/Kafka-Group@{i}/config/zookeeper.properties" append="true"/>
+                        <echo message="${line.separator}syncLimit=2"
+                              file="${deployFolder}/Kafka-Group@{i}/config/zookeeper.properties" append="true"/>
+                        <for param="k" begin="${DEPLOY_KAFKA_GROUP_NUMBER}" step="-1" end="1">
+                            <sequential>
+                                <echo message="${line.separator}server.@{k}=${Group@{k}.ZOOKEEPER.IP}:${Group@{k}.ZOOKEEPER.INNER.PORT}"
+                                      file="${deployFolder}/Kafka-Group@{i}/config/zookeeper.properties" append="true"/>
+                            </sequential>
+                        </for>
+
+                        <!--修改zookeeper的日志输出到相对路径-->
+                        <replace file="${deployFolder}/Kafka-Group@{i}/config/zookeeper.properties"
+                                 token="dataDir=/tmp/zookeeper" value="dataDir=tmp/zookeeper" encoding="UTF-8"/>
+
+                        <!-- 替换kafak的broker.id-->
+                        <replace file="${deployFolder}/Kafka-Group@{i}/config/server.properties" token="broker.id=0"
+                                 value="broker.id=@{i}" encoding="UTF-8"/>
+
+                        <!--替换kafka的IP和port配置-->
+                        <replace file="${deployFolder}/Kafka-Group@{i}/config/server.properties"
+                                 token="#listeners=PLAINTEXT://:9092"
+                                 value="listeners=PLAINTEXT://${Group@{i}.KAFKA.IP}:${Group@{i}.KAFKA.PORT}"
+                                 encoding="UTF-8"/>
+                        <replace file="${deployFolder}/Kafka-Group@{i}/config/server.properties"
+                                 token="#advertised.listeners=PLAINTEXT://your.host.name:9092"
+                                 value="advertised.listeners=PLAINTEXT://${Group@{i}.KAFKA.IP}:${Group@{i}.KAFKA.PORT}"
+                                 encoding="UTF-8"/>
+
+                        <!--替换kafka的ZK配置-->
+                        <replace file="${deployFolder}/Kafka-Group@{i}/config/server.properties"
+                                 token="zookeeper.connect=localhost:2181"
+                                 value="zookeeper.connect=${ZOOKEEPER.CONNECT.URL}" encoding="UTF-8"/>
+
+                        <!--修改kafka的日志输出到相对路径-->
+                        <replace file="${deployFolder}/Kafka-Group@{i}/config/server.properties"
+                                 token="log.dirs=/tmp/kafka-logs" value="log.dirs=tmp/kafka-logs" encoding="UTF-8"/>
+
+                        <!--修改zk和kafak的启动窗口title-->
+                        <replace file="${deployFolder}/Kafka-Group@{i}/bin/windows/kafka-server-start.bat"
+                                 token="rem limitations under the License." value="title GROUP@{i}-Kafka"
+                                 encoding="UTF-8"/>
+                        <replace file="${deployFolder}/Kafka-Group@{i}/bin/windows/zookeeper-server-start.bat"
+                                 token="rem limitations under the License." value="title GROUP@{i}-Zookeeper"
+                                 encoding="UTF-8"/>
+
+                        <echo>this is deployment end for KAFKA-GROUP@{i}</echo>
+                    </sequential>
+                </for>
+            </else>
+        </if>
+    </target>
+
+    <target name="createRunScript">
+        <if>
+            <equals arg1="${DEPLOY_KAFKA_GROUP_NUMBER}" arg2="0"/>
+            <else>
+
+                <!--如果是windows，则生成windows脚本-->
+                <if>
+                    <equals arg1="${DEPLOY_PLATFORM}" arg2="win"/>
+                    <then>
+                        <antcall target="createRunScript-win"/>
+                    </then>
+                </if>
+
+                <!--如果是linux，则生成win脚本-->
+                <if>
+                    <equals arg1="${DEPLOY_PLATFORM}" arg2="linux"/>
+                    <then>
+                        <antcall target="createRunScript-linux"/>
+                    </then>
+                </if>
+            </else>
+        </if>
+    </target>
+
+    <target name="createRunScript-win">
+
+
+
+        <delete file="${deployFolder}/startGroup.bat"/>
+        <!--生成全体启动脚本，先拉起所有的zookeeper后再拉起所有的kafka-->
+        <echo message="SET home=%cd%" file="${deployFolder}/startGroup.bat" append="true"/>
+        <echo message="${line.separator}" file="${deployFolder}/startGroup.bat"
+              append="true"/>
+        <echo message="${line.separator}" file="${deployFolder}/startGroup.bat"
+              append="true"/>
+
+        <for param="i" begin="${DEPLOY_KAFKA_GROUP_NUMBER}" step="-1" end="1">
+            <sequential>
+                <echo message="${line.separator}cd  %home%\Kafka-Group@{i}\bin\windows"
+                      file="${deployFolder}/startGroup.bat" append="true"/>
+                <echo message="${line.separator}start zookeeper-server-start.bat ../../config/zookeeper.properties"
+                      file="${deployFolder}/startGroup.bat" append="true"/>
+            </sequential>
+        </for>
+
+        <echo message="${line.separator}ping 127.0.0.1 -n 8 >nul" file="${deployFolder}/startGroup.bat" append="true" />
+        <echo message="${line.separator}" file="${deployFolder}/startGroup.bat" append="true" />
+
+        <for param="i" begin="${DEPLOY_KAFKA_GROUP_NUMBER}" step="-1" end="1">
+            <sequential>
+                <echo message="${line.separator}cd  %home%\Kafka-Group@{i}\bin\windows"
+                      file="${deployFolder}/startGroup.bat" append="true"/>
+                <echo message="${line.separator}start kafka-server-start.bat ../../config/server.properties"
+                      file="${deployFolder}/startGroup.bat" append="true"/>
+            </sequential>
+        </for>
+
+
+        <!--生成单独的启动脚本，用于测试重启某个服务的情况-->
+        <for param="i" begin="${DEPLOY_KAFKA_GROUP_NUMBER}" step="-1" end="1">
+            <sequential>
+                <delete file="${deployFolder}/Kafka-Group@{i}/startZookeeper.bat"/>
+                <!--启动zookeeper-->
+                <echo message="SET home=%cd%" file="${deployFolder}/Kafka-Group@{i}/startZookeeper.bat" append="true"/>
+                <echo message="${line.separator}" file="${deployFolder}/Kafka-Group@{i}/startZookeeper.bat"
+                      append="true"/>
+                <echo message="${line.separator}" file="${deployFolder}/Kafka-Group@{i}/startZookeeper.bat"
+                      append="true"/>
+                <echo message="${line.separator}cd  %home%\bin\windows"
+                      file="${deployFolder}/Kafka-Group@{i}/startZookeeper.bat" append="true"/>
+                <echo message="${line.separator}start zookeeper-server-start.bat ../../config/zookeeper.properties"
+                      file="${deployFolder}/Kafka-Group@{i}/startZookeeper.bat" append="true"/>
+
+                <!--启动kafka-->
+                <echo message="SET home=%cd%" file="${deployFolder}/Kafka-Group@{i}/startKafka.bat" append="true"/>
+                <echo message="${line.separator}" file="${deployFolder}/Kafka-Group@{i}/startKafka.bat" append="true"/>
+                <echo message="${line.separator}" file="${deployFolder}/Kafka-Group@{i}/startKafka.bat" append="true"/>
+                <echo message="${line.separator}cd  %home%\bin\windows"
+                      file="${deployFolder}/Kafka-Group@{i}/startKafka.bat" append="true"/>
+                <echo message="${line.separator}start kafka-server-start.bat ../../config/server.properties"
+                      file="${deployFolder}/Kafka-Group@{i}/startKafka.bat" append="true"/>
+            </sequential>
+        </for>
+
+    </target>
+
+    <target name="createRunScript-linux"></target>
+
+
+    <target name="calcZookeeperURL">
+        <echo message="calcZookeeperURL"/>
+        <if>
+            <equals arg1="${DEPLOY_KAFKA_GROUP_NUMBER}" arg2="0"/>
+            <else>
+                <var name="ZOOKEEPER.CONNECT.URL" value=""/>
+                <for param="i" begin="${DEPLOY_KAFKA_GROUP_NUMBER}" step="-1" end="1">
+                    <sequential>
+                        <if>
+                            <equals arg1="${ZOOKEEPER.CONNECT.URL}" arg2=""/>
+                            <then>
+                                <var name="ZOOKEEPER.CONNECT.URL"
+                                     value="${Group@{i}.ZOOKEEPER.IP}:${Group@{i}.ZOOKEEPER.PORT}"/>
+                            </then>
+                            <else>
+                                <var name="ZOOKEEPER.CONNECT.URL"
+                                     value="${Group@{i}.ZOOKEEPER.IP}:${Group@{i}.ZOOKEEPER.PORT},${ZOOKEEPER.CONNECT.URL}"/>
+                            </else>
+                        </if>
+                    </sequential>
+                </for>
+                <echo message="ZookeeperURL=${ZOOKEEPER.CONNECT.URL}"/>
+            </else>
+        </if>
+    </target>
+
+
+</project>
