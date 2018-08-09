@@ -38,7 +38,6 @@ public class Rec {
                         + " value=" + ((Person)record.value()).toString()
                         + " partition=" + record.partition()
                         + " timestamp=" + record.timestamp());
-
             }
         }
 

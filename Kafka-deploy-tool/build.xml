@@ -33,8 +33,7 @@
             description="清理所有并重新生成Kafka组"/>
 
     <target name="getkafka" description="下载kafka压缩包">
-        <delete dir="${productfolder}"/>
-        <mkdir dir="${productfolder}"/>
+        <delete file="${productfolder}/kafka_2.11-2.0.0.tgz"/>
         <get src="https://mirrors.tuna.tsinghua.edu.cn/apache/kafka/2.0.0/kafka_2.11-2.0.0.tgz"
              dest="${productfolder}/kafka_2.11-2.0.0.tgz" usetimestamp="true"/>
         <untar src="${productfolder}/kafka_2.11-2.0.0.tgz" dest="${productfolder}/" compression="gzip"/>
@@ -122,6 +121,12 @@
                         <!--修改kafka的日志输出到相对路径-->
                         <replace file="${deployFolder}/Kafka-Group@{i}/config/server.properties"
                                  token="log.dirs=/tmp/kafka-logs" value="log.dirs=tmp/kafka-logs" encoding="UTF-8"/>
+
+                        <!--如果是集群模式的话，开启多副本-->
+                        <replace file="${deployFolder}/Kafka-Group@{i}/config/server.properties"
+                                 token="offsets.topic.replication.factor=1" value="offsets.topic.replication.factor=2" encoding="UTF-8"/>
+
+
 
                         <!--修改zk和kafak的启动窗口title-->
                         <replace file="${deployFolder}/Kafka-Group@{i}/bin/windows/kafka-server-start.bat"

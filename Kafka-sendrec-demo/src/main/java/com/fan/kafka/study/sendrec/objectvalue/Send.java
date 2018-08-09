@@ -2,6 +2,7 @@ package com.fan.kafka.study.sendrec.objectvalue;
 
 import com.fan.kafka.study.info.Person;
 import com.fan.kafka.study.util.PropertiesUtils;
+import kafka.utils.ZkUtils;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
