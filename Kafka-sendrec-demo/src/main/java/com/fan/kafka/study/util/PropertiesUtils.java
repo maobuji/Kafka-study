@@ -1,5 +1,7 @@
 package com.fan.kafka.study.util;
 
+import com.fan.kafka.study.sendrec.stringvalue.Send;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.util.Properties;
@@ -12,7 +14,11 @@ public class PropertiesUtils {
 
         File configFile = new File(filePath);
         if (!configFile.exists()) {
-            throw new Exception("未找到配置文件:" + configFile.getAbsolutePath());
+            filePath = PropertiesUtils.class.getClassLoader().getResource(filePath).getPath();
+            configFile = new File(filePath);
+            if (!configFile.exists()) {
+                throw new Exception("未找到配置文件:" + configFile.getAbsolutePath());
+            }
         }
         FileInputStream in = new FileInputStream(configFile.getAbsolutePath());
         props.load(in);
@@ -39,7 +45,7 @@ public class PropertiesUtils {
         }
         return defaultValue;
     }
-    
+
     public static int getInt(Properties properties, String key, int defaultValue) {
         try {
             defaultValue = Integer.valueOf(properties.getProperty(key).trim()).intValue();
@@ -48,7 +54,7 @@ public class PropertiesUtils {
         }
         return defaultValue;
     }
-    
+
 
     public static String getString(Properties properties, String key, String defaultValue) {
         String temp = properties.getProperty(key);
