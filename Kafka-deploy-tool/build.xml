@@ -16,49 +16,59 @@
     </taskdef>
 
 
-
     <target name="SHOWMESSAGE">
         <echo message="Kafka测试环境部署工具"/>
         <echo message="部署工具的配置信息在config.properties文件中，启用工具前，请提前做好配置"/>
         <echo message="可用命令如下："/>
-        <echo message="ant getkafka   :下载kafka压缩包"/>
-        <echo message="ant reall           :清理所有并重新生成Kafka组"/>
+        <echo message="ant unzippro   :解压kafka相关安装包"/>
+        <echo message="ant reall           :清理所有并重新生成Kafka组和kafka-manager"/>
         <echo message="             "/>
         <echo message="请使用ant -p 命令查看所有可用任务"/>
         <echo message="使用ant 命令1 命令2 命令3 可自动顺序执行多个命令"/>
     </target>
 
 
-    <target name="reall" depends="clearKafka,calcZookeeperURL,createKafkaGroup,createRunScript"
+    <target name="reall" depends="calcZookeeperURL,createKafkaGroup,createKafka-manager,createRunScript"
             description="清理所有并重新生成Kafka组"/>
 
-    <target name="getkafka" description="下载kafka压缩包">
-        <delete file="${productfolder}/kafka_2.11-2.0.0.tgz"/>
+    <target name="unzippro" description="解压kafka相关安装包">
+
+        <!--
         <get src="https://mirrors.tuna.tsinghua.edu.cn/apache/kafka/2.0.0/kafka_2.11-2.0.0.tgz"
              dest="${productfolder}/kafka_2.11-2.0.0.tgz" usetimestamp="true"/>
-        <untar src="${productfolder}/kafka_2.11-2.0.0.tgz" dest="${productfolder}/" compression="gzip"/>
+         -->
+        <untar src="${productfolder}/${INSTALL.PRODUCT.KAFKA.VERSION}.tgz" dest="${productfolder}/" compression="gzip"/>
 
-        <!-- 改成不带版本号的，后续使用时会比较方便-->
+        <delete dir="${productfolder}/kafka"/>
+         <!--改成不带版本号的，后续使用时会比较方便-->
         <copy todir="${productfolder}/kafka">
             <fileset dir="${productfolder}/kafka_2.11-2.0.0">
             </fileset>
         </copy>
-        <delete dir="${productfolder}/kafka_2.11-2.0.0"/>
-        <delete file="${productfolder}/kafka_2.11-2.0.0.tgz"/>
-    </target>
+        <delete dir="${productfolder}/${INSTALL.PRODUCT.KAFKA.VERSION}"/>
 
-    <!--清理掉现有环境中的多余的产品文件-->
-    <target name="clearKafka">
-        <delete includeemptydirs="true" verbose="false" failonerror="false">
-            <fileset dir="${deployFolder}">
-                <include name="Kafka-Group*/**"/>
+
+        <unzip src="${productfolder}/${INSTALL.PRODUCT.KAFKA-MANAGER.VERSION}.zip" dest="${productfolder}/"/>
+        <delete dir="${productfolder}/kafka-manager"/>
+        <!--改成不带版本号的，后续使用时会比较方便-->
+        <copy todir="${productfolder}/kafka-manager">
+            <fileset dir="${productfolder}/${INSTALL.PRODUCT.KAFKA-MANAGER.VERSION}">
             </fileset>
-        </delete>
+        </copy>
+        <delete dir="${productfolder}/${INSTALL.PRODUCT.KAFKA-MANAGER.VERSION}"/>
     </target>
 
 
     <!--根据配置重新生成所有的kafka-->
     <target name="createKafkaGroup">
+        <!--清理掉现有环境中的多余的产品文件-->
+        <delete includeemptydirs="true" verbose="false" failonerror="false">
+            <fileset dir="${deployFolder}">
+                <include name="Kafka-Group*/**"/>
+            </fileset>
+        </delete>
+
+        <!--开始生成-->
         <if>
             <equals arg1="${DEPLOY_KAFKA_GROUP_NUMBER}" arg2="0"/>
             <else>
@@ -141,6 +151,17 @@
                 </for>
             </else>
         </if>
+    </target>
+
+
+    <target name="createKafka-manager">
+
+        <delete dir="${deployFolder}/Kafka-Manager"/>
+
+        <!--拷贝kafka基本文件到对应的部署目录-->
+        <copy todir="${deployFolder}/Kafka-Manager">
+            <fileset dir="${productfolder}/kafka-manager"/>
+        </copy>
     </target>
 
     <target name="createRunScript">
@@ -230,6 +251,8 @@
     </target>
 
     <target name="createRunScript-linux"></target>
+
+
 
 
     <target name="calcZookeeperURL">
