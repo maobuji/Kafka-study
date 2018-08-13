@@ -229,6 +229,10 @@
         <echo message="${line.separator}start kafka-topics.bat --create --zookeeper ${ZOOKEEPER.CONNECT.URL} --replication-factor 2 --partitions 1 --topic testAsyncTopic"
               file="${deployFolder}/createGroupTopic.bat" append="true"/>
 
+        <echo message="${line.separator}start kafka-topics.bat --create --zookeeper ${ZOOKEEPER.CONNECT.URL} --replication-factor 2 --partitions 1 --topic testTransctionTopic"
+              file="${deployFolder}/createGroupTopic.bat" append="true"/>
+
+
     </target>
 
     <target name="createAddTopicScript-linux">
