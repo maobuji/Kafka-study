@@ -28,7 +28,7 @@
     </target>
 
 
-    <target name="reall" depends="calcZookeeperURL,createKafkaGroup,createKafka-manager,createRunScript"
+    <target name="reall" depends="createKafkaGroup,createKafka-manager,createRunScript"
             description="清理所有并重新生成Kafka组"/>
 
     <target name="unzippro" description="解压kafka相关安装包">
@@ -40,7 +40,7 @@
         <untar src="${productfolder}/${INSTALL.PRODUCT.KAFKA.VERSION}.tgz" dest="${productfolder}/" compression="gzip"/>
 
         <delete dir="${productfolder}/kafka"/>
-         <!--改成不带版本号的，后续使用时会比较方便-->
+        <!--改成不带版本号的，后续使用时会比较方便-->
         <copy todir="${productfolder}/kafka">
             <fileset dir="${productfolder}/kafka_2.11-2.0.0">
             </fileset>
@@ -60,7 +60,7 @@
 
 
     <!--根据配置重新生成所有的kafka-->
-    <target name="createKafkaGroup">
+    <target name="createKafkaGroup" depends="calcZookeeperURL">
         <!--清理掉现有环境中的多余的产品文件-->
         <delete includeemptydirs="true" verbose="false" failonerror="false">
             <fileset dir="${deployFolder}">
@@ -132,11 +132,25 @@
                         <replace file="${deployFolder}/Kafka-Group@{i}/config/server.properties"
                                  token="log.dirs=/tmp/kafka-logs" value="log.dirs=tmp/kafka-logs" encoding="UTF-8"/>
 
-                        <!--如果是集群模式的话，开启多副本-->
-                        <replace file="${deployFolder}/Kafka-Group@{i}/config/server.properties"
-                                 token="offsets.topic.replication.factor=1" value="offsets.topic.replication.factor=2" encoding="UTF-8"/>
 
+                        <if>
+                            <equals arg1="${DEPLOY_KAFKA_GROUP_NUMBER}" arg2="1"/>
+                            <else>
+                                <!--如果是集群模式的话，开启多副本-->
+                                <replace file="${deployFolder}/Kafka-Group@{i}/config/server.properties"
+                                         token="offsets.topic.replication.factor=1"
+                                         value="offsets.topic.replication.factor=2"
+                                         encoding="UTF-8"/>
+                                <!--如果是集群模式的话，不允许新增队列-->
+                                <echo message="${line.separator}"
+                                      file="${deployFolder}/Kafka-Group@{i}/config/server.properties"
+                                      append="true" encoding="UTF-8"/>
+                                <echo message="auto.create.topics.enable=false"
+                                      file="${deployFolder}/Kafka-Group@{i}/config/server.properties"
+                                      append="true" encoding="UTF-8"/>
 
+                            </else>
+                        </if>
 
                         <!--修改zk和kafak的启动窗口title-->
                         <replace file="${deployFolder}/Kafka-Group@{i}/bin/windows/kafka-server-start.bat"
@@ -146,6 +160,7 @@
                                  token="rem limitations under the License." value="title GROUP@{i}-Zookeeper"
                                  encoding="UTF-8"/>
 
+
                         <echo>this is deployment end for KAFKA-GROUP@{i}</echo>
                     </sequential>
                 </for>
@@ -154,7 +169,7 @@
     </target>
 
 
-    <target name="createKafka-manager">
+    <target name="createKafka-manager" depends="calcZookeeperURL">
 
         <delete dir="${deployFolder}/Kafka-Manager"/>
 
@@ -162,35 +177,66 @@
         <copy todir="${deployFolder}/Kafka-Manager">
             <fileset dir="${productfolder}/kafka-manager"/>
         </copy>
+
+        <replace file="${deployFolder}/Kafka-Manager/conf/application.conf"
+                 token="kafka-manager-zookeeper:2181" value="${ZOOKEEPER.CONNECT.URL}"
+                 encoding="UTF-8"/>
+
     </target>
 
-    <target name="createRunScript">
+    <target name="createRunScript" depends="calcZookeeperURL">
         <if>
             <equals arg1="${DEPLOY_KAFKA_GROUP_NUMBER}" arg2="0"/>
             <else>
 
-                <!--如果是windows，则生成windows脚本-->
+                <!--如果是windows，则生成bat脚本-->
                 <if>
                     <equals arg1="${DEPLOY_PLATFORM}" arg2="win"/>
                     <then>
                         <antcall target="createRunScript-win"/>
+                        <antcall target="createAddTopicScript-win"/>
                     </then>
                 </if>
 
-                <!--如果是linux，则生成win脚本-->
+                <!--如果是linux，则生成sh脚本-->
                 <if>
                     <equals arg1="${DEPLOY_PLATFORM}" arg2="linux"/>
                     <then>
                         <antcall target="createRunScript-linux"/>
+                        <antcall target="createAddTopicScript-linux"/>
                     </then>
                 </if>
             </else>
         </if>
     </target>
 
+
+    <target name="createAddTopicScript-win">
+        <delete file="${deployFolder}/createGroupTopic.bat"/>
+        <echo message="SET home=%cd%" file="${deployFolder}/createGroupTopic.bat" append="true"/>
+        <echo message="${line.separator}" file="${deployFolder}/createGroupTopic.bat"
+              append="true"/>
+
+        <echo message="${line.separator}cd  %home%\Kafka-Group1\bin\windows"
+              file="${deployFolder}/createGroupTopic.bat" append="true"/>
+
+        <echo message="${line.separator}start kafka-topics.bat --create --zookeeper ${ZOOKEEPER.CONNECT.URL} --replication-factor 2 --partitions 1 --topic testObjectTopic"
+              file="${deployFolder}/createGroupTopic.bat" append="true"/>
+
+        <echo message="${line.separator}start kafka-topics.bat --create --zookeeper ${ZOOKEEPER.CONNECT.URL} --replication-factor 2 --partitions 1 --topic testStringTopic"
+              file="${deployFolder}/createGroupTopic.bat" append="true"/>
+
+        <echo message="${line.separator}start kafka-topics.bat --create --zookeeper ${ZOOKEEPER.CONNECT.URL} --replication-factor 2 --partitions 1 --topic testAsyncTopic"
+              file="${deployFolder}/createGroupTopic.bat" append="true"/>
+
+    </target>
+
+    <target name="createAddTopicScript-linux">
+
+
+    </target>
+
     <target name="createRunScript-win">
-
-
 
         <delete file="${deployFolder}/startGroup.bat"/>
         <!--生成全体启动脚本，先拉起所有的zookeeper后再拉起所有的kafka-->
@@ -209,8 +255,8 @@
             </sequential>
         </for>
 
-        <echo message="${line.separator}ping 127.0.0.1 -n 8 >nul" file="${deployFolder}/startGroup.bat" append="true" />
-        <echo message="${line.separator}" file="${deployFolder}/startGroup.bat" append="true" />
+        <echo message="${line.separator}ping 127.0.0.1 -n 8 >nul" file="${deployFolder}/startGroup.bat" append="true"/>
+        <echo message="${line.separator}" file="${deployFolder}/startGroup.bat" append="true"/>
 
         <for param="i" begin="${DEPLOY_KAFKA_GROUP_NUMBER}" step="-1" end="1">
             <sequential>
@@ -221,6 +267,15 @@
             </sequential>
         </for>
 
+        <echo message="${line.separator}" file="${deployFolder}/startGroup.bat"
+              append="true"/>
+        <echo message="${line.separator}ping 127.0.0.1 -n 8 >nul" file="${deployFolder}/startGroup.bat" append="true"/>
+
+        <echo message="${line.separator}cd  %home%\Kafka-Manager\bin"
+              file="${deployFolder}/startGroup.bat" append="true"/>
+
+        <echo message="${line.separator}start kafka-manager.bat"
+              file="${deployFolder}/startGroup.bat" append="true"/>
 
         <!--生成单独的启动脚本，用于测试重启某个服务的情况-->
         <for param="i" begin="${DEPLOY_KAFKA_GROUP_NUMBER}" step="-1" end="1">
@@ -253,8 +308,6 @@
     <target name="createRunScript-linux"></target>
 
 
-
-
     <target name="calcZookeeperURL">
         <echo message="calcZookeeperURL"/>
         <if>
@@ -280,6 +333,5 @@
             </else>
         </if>
     </target>
-
 
 </project>

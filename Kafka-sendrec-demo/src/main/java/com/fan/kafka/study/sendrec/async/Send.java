@@ -1,4 +1,4 @@
-package com.fan.kafka.study.sendrec.stringvalue;
+package com.fan.kafka.study.sendrec.async;
 
 import com.fan.kafka.study.util.PropertiesUtils;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -6,7 +6,6 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Created by Administrator on 2018/8/7.
@@ -26,9 +25,9 @@ public class Send {
         Producer<String, String> producer = new KafkaProducer<String, String>(props);
 
 
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < 100; i++) {
 
-            String topic="testStringTopic";
+            String topic="testAsyncTopic";
             String key=""+System.nanoTime();
             String value="消息"+i;
 
@@ -37,8 +36,6 @@ public class Send {
 
             // 直接发送消息
             producer.send(producerRecord);
-
-
 
             // 等待到发送成功才返回
             // producer.send(producerRecord).get();
